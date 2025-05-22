@@ -1,7 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Configurations.Input;
 using Core;
+using Cysharp.Threading.Tasks;
+using Services.WindowSystem;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
@@ -24,6 +27,8 @@ namespace Services.Input
         public EventSystem CurrentEventSystem => _eventSystem;
         public InputConfig Config { get; set; }
         public InputType CurrentInput { get; private set; }
+        
+        public event Action CloseUIEvent; //for esc (close top window)
 
         public InputService(InputConfig config)
         {
@@ -45,6 +50,12 @@ namespace Services.Input
             var eventSystem = Engine.CreateObject("[EVENT_SYSTEM]", null, typeof(EventSystem), typeof(InputSystemUIInputModule));
             _eventSystem = eventSystem.GetComponent<EventSystem>();
             _eventSystem.GetComponent<InputSystemUIInputModule>().actionsAsset = Config.Control;
+            
+            CloseUIEvent += () =>
+            {
+                var windowService = Engine.GetService<WindowService>();
+                windowService.HideTopWindowFromStack().Forget();
+            };
         }
         
         public void SetInput(params InputType[] inputTypes) //Change input
@@ -65,6 +76,7 @@ namespace Services.Input
         
         public void Destroy()
         {
+            CloseUIEvent = null;
         }
         
         //Player

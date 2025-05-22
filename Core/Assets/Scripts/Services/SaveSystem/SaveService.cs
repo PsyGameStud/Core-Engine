@@ -7,21 +7,20 @@ using UnityEngine;
 
 namespace Services.SaveSystem
 {
-    public class SaveService : MonoBehaviour, IService
+    public class SaveService : IService
     {
-        private Type _prevType;
-        public static bool SkipSave = false;
-        private static int _currentSlot = 0;
-
-        private static readonly Dictionary<Type, SaveData> SAVE_LOCALS_MAP = new()
+        private readonly Dictionary<Type, SaveData> _localSaves = new()
         {
-            { typeof(CurrencySaveData), new CurrencySaveData() }, //Example
+            { typeof(CurrencySaveData), new CurrencySaveData() },
         };
 
-        private static readonly Dictionary<Type, SaveData> GLOBAL_SAVE_MAP = new()
+        private readonly Dictionary<Type, SaveData> _globalSaves = new()
         {
-            { typeof(SettingsSaveData), new SettingsSaveData() }, //Example
+            { typeof(SettingsSaveData), new SettingsSaveData() },
         };
+
+        private int _currentSlot = 0;
+        public static bool SkipSave { get; private set; }
 
         public void Initialize()
         {
@@ -29,8 +28,7 @@ namespace Services.SaveSystem
             LoadLocal();
 
             bool hasSaveFiles = false;
-
-            foreach (var save in SAVE_LOCALS_MAP.Values)
+            foreach (var save in _localSaves.Values)
             {
                 if (File.Exists(save.GetFilePath(_currentSlot)))
                 {
@@ -52,18 +50,18 @@ namespace Services.SaveSystem
             SaveAll();
         }
 
-        public static T Get<T>() where T : SaveData
+        public T Get<T>() where T : SaveData
         {
-            if (SAVE_LOCALS_MAP.TryGetValue(typeof(T), out var saveData))
+            if (_localSaves.TryGetValue(typeof(T), out var saveData))
             {
                 return (T)saveData;
             }
             throw new Exception($"Save file of type {typeof(T).Name} not found in save map.");
         }
 
-        public static T GetGlobal<T>() where T : SaveData
+        public T GetGlobal<T>() where T : SaveData
         {
-            if (GLOBAL_SAVE_MAP.TryGetValue(typeof(T), out var saveData))
+            if (_globalSaves.TryGetValue(typeof(T), out var saveData))
             {
                 return (T)saveData;
             }
@@ -72,7 +70,7 @@ namespace Services.SaveSystem
 
         private void LoadLocal()
         {
-            foreach (var (type, save) in SAVE_LOCALS_MAP)
+            foreach (var (type, save) in _localSaves)
             {
                 var filePath = save.GetFilePath(_currentSlot);
                 if (!File.Exists(filePath))
@@ -80,7 +78,7 @@ namespace Services.SaveSystem
                     File.WriteAllText(filePath, JsonUtility.ToJson(save, true));
                     continue;
                 }
-                
+
                 try
                 {
                     var json = File.ReadAllText(filePath);
@@ -95,7 +93,7 @@ namespace Services.SaveSystem
 
         private void LoadGlobal()
         {
-            foreach (var (type, save) in GLOBAL_SAVE_MAP)
+            foreach (var (type, save) in _globalSaves)
             {
                 var filePath = save.GetGlobalFilePath();
                 if (!File.Exists(filePath))
@@ -103,7 +101,7 @@ namespace Services.SaveSystem
                     File.WriteAllText(filePath, JsonUtility.ToJson(save, true));
                     continue;
                 }
-                
+
                 try
                 {
                     var json = File.ReadAllText(filePath);
@@ -116,24 +114,24 @@ namespace Services.SaveSystem
             }
         }
 
-        private void SaveAll()
+        public void SaveAll()
         {
             if (SkipSave) return;
-            
-            foreach (var save in SAVE_LOCALS_MAP.Values)
+
+            foreach (var save in _localSaves.Values)
             {
                 save.SaveSlotData(_currentSlot);
             }
-            
-            foreach (var save in GLOBAL_SAVE_MAP.Values)
+
+            foreach (var save in _globalSaves.Values)
             {
                 save.SaveGlobalData();
             }
         }
-        
+
         public bool HasSavesInSlot(int slot)
         {
-            foreach (var save in SAVE_LOCALS_MAP.Values)
+            foreach (var save in _localSaves.Values)
             {
                 var path = save.GetFilePath(slot);
                 if (File.Exists(path))
@@ -144,7 +142,7 @@ namespace Services.SaveSystem
 
             return false;
         }
-        
+
         public void ClearSaves(int slot)
         {
             if (!HasSavesInSlot(slot))
@@ -153,22 +151,53 @@ namespace Services.SaveSystem
                 return;
             }
 
-            var keys = new List<Type>(SAVE_LOCALS_MAP.Keys);
+            var keys = new List<Type>(_localSaves.Keys);
 
             foreach (var type in keys)
             {
                 var newInstance = (SaveData)Activator.CreateInstance(type);
-                SAVE_LOCALS_MAP[type] = newInstance;
+                _localSaves[type] = newInstance;
             }
 
             var originalSkipState = SkipSave;
             SkipSave = false;
-            foreach (var save in SAVE_LOCALS_MAP.Values)
+            foreach (var save in _localSaves.Values)
             {
                 save.SaveSlotData(slot);
             }
-
             SkipSave = originalSkipState;
+        }
+
+        public void DeleteSlotFolder(int slot)
+        {
+            var path = Path.Combine(Application.persistentDataPath, $"Slot_{slot}");
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, true);
+            }
+        }
+
+        public void ClearSlotFolderContents(int slot)
+        {
+            var folderPath = Path.Combine(Application.persistentDataPath, "Data", $"Slot_{slot}").Replace("\\", "/");
+            if (!Directory.Exists(folderPath))
+            {
+                Debug.LogWarning($"Slot folder does not exist: {folderPath}");
+                return;
+            }
+
+            var files = Directory.GetFiles(folderPath);
+            foreach (var file in files)
+            {
+                try
+                {
+                    File.Delete(file);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"Failed to delete file {file}: {e.Message}");
+                }
+            }
         }
 
         public void Destroy()

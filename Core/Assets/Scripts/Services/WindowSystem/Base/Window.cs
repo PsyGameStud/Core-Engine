@@ -1,3 +1,4 @@
+using System;
 using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using UnityEngine;
@@ -9,14 +10,16 @@ namespace Services.WindowSystem.Base
         [SerializeField] protected ScreenType _screenType;
         [SerializeField] protected RectTransform _root;
         [SerializeField] protected CanvasGroup _canvasGroup;
+        [SerializeField] protected bool _canCloseFromButton = true;
         
         protected bool _isOpened;
-        
+
+        public bool CanCloseFromButton => _canCloseFromButton;
         public bool IsOpened => _isOpened;
 
-        public virtual void Setup()
-        {
-        }
+        public event Action OnClosedWindow;
+
+        public virtual void Setup() {}
 
         public virtual async UniTask Show(IWindowArgs args = null)
         {
@@ -25,7 +28,7 @@ namespace Services.WindowSystem.Base
 
             _isOpened = true;
 
-            switch (_screenType) //Example
+            switch (_screenType)
             {
                 case ScreenType.Popup:
                     _root.localScale = Vector3.zero;
@@ -63,9 +66,10 @@ namespace Services.WindowSystem.Base
             gameObject.SetActive(false);
         }
 
-        private void CloseWindow()
+        protected void CloseWindow()
         {
             Hide().Forget();
+            OnClosedWindow?.Invoke();
         }
 
         protected virtual void OnDestroy()
@@ -81,4 +85,3 @@ namespace Services.WindowSystem.Base
         Popup
     }
 }
-

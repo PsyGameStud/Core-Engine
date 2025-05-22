@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 485671c74c9ea4a42b09f956558d0498, type: 3}
   m_Name: InputConfig
   m_EditorClassIdentifier: 
-  Control: {fileID: 0}
+  Control: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
