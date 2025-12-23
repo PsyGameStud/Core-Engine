@@ -1,9 +1,9 @@
+using Core.Dependency;
 using UnityEngine;
 
 namespace Core
 {
-    public class Config : ScriptableObject
+    public abstract class Config : ScriptableObject, IConfig
     {
-    
     }
 }

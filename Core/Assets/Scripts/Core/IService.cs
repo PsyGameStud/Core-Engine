@@ -1,6 +1,8 @@
+using Core.Dependency;
+
 namespace Core
 {
-    public interface IService
+    public interface IService : IDependency
     {
         void Initialize();
         void Destroy();

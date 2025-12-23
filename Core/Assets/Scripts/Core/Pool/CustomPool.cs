@@ -23,10 +23,16 @@ namespace Core.Pool
 
         public T Get(Action<T> beforeActivate = null)
         {
+            while (_objects.Count > 0 && _objects.Peek() == null)
+                _objects.Dequeue();
+
             if (_objects.Count == 0)
+            {
                 Create();
+            }
 
             T obj = _objects.Dequeue();
+
             beforeActivate?.Invoke(obj);
             obj.gameObject.SetActive(true);
 
@@ -44,6 +50,17 @@ namespace Core.Pool
             var obj = Object.Instantiate(_prefab, _parent);
             _objects.Enqueue(obj);
             obj.gameObject.SetActive(false);
+        }
+        
+        public void Clear()
+        {
+            foreach (var obj in _objects)
+            {
+                if (obj != null)
+                    Object.Destroy(obj.gameObject);
+            }
+
+            _objects.Clear();
         }
     }
 }

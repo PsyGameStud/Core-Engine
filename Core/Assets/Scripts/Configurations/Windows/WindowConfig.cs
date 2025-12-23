@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Core;
-using Services.WindowSystem.Base;
+using UI.Base;
 using UnityEngine;
 
 namespace Configurations.Windows

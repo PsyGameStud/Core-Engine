@@ -1,4 +1,5 @@
 {
+    "version": 1,
     "name": "InputControl",
     "maps": [
         {
@@ -501,7 +502,7 @@
                     "name": "Cancel",
                     "type": "Button",
                     "id": "15cef263-9014-4fd5-94d9-4e4a6234a6ef",
-                    "expectedControlType": "Button",
+                    "expectedControlType": "",
                     "processors": "",
                     "interactions": "",
                     "initialStateCheck": false
@@ -986,6 +987,34 @@
                     "processors": "",
                     "groups": "XR",
                     "action": "TrackedDeviceOrientation",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                }
+            ]
+        },
+        {
+            "name": "Default",
+            "id": "130678c4-770b-417e-917a-3c47adf56cad",
+            "actions": [
+                {
+                    "name": "Pause",
+                    "type": "Button",
+                    "id": "92956e1c-e728-4f96-a230-1f9fd7bd0add",
+                    "expectedControlType": "",
+                    "processors": "",
+                    "interactions": "",
+                    "initialStateCheck": false
+                }
+            ],
+            "bindings": [
+                {
+                    "name": "",
+                    "id": "4ea39f19-c790-4299-b730-c37a3d215714",
+                    "path": "*/{Cancel}",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "Keyboard&Mouse;Gamepad;Touch;Joystick;XR",
+                    "action": "Pause",
                     "isComposite": false,
                     "isPartOfComposite": false
                 }

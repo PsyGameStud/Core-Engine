@@ -3,158 +3,169 @@ using System.Collections.Generic;
 using System.Linq;
 using Configurations.Input;
 using Core;
-using Cysharp.Threading.Tasks;
-using Services.WindowSystem;
+using Core.Dependency;
+using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.DualShock;
 using UnityEngine.InputSystem.UI;
 
 namespace Services.Input
 {
     public enum InputType
     {
-        UI,
-        Player,
+        Default = 0,
+        UI = 1,
+        Player = 2,
+    }
+
+    public enum ControlSchemeType
+    {
+        Undefined = -1,
+        KeyboardAndMouse,
+        Gamepad
     }
     
-    public class InputService : IService<InputConfig>, InputControl.IPlayerActions, InputControl.IUIActions
+    public enum InputDeviceType
     {
-        private InputControl _gameInput;
-        private EventSystem _eventSystem;
+        None = -1,
+        KeyboardAndMouse,
+        Xbox,
+        DualShock,
+        DualSense,
+        NintendoSwitch
+    }
+
+    public class InputService : MonoBehaviour, IInitializable, IDependency
+    {
+        private const string KEYBOARD_AND_MOUSE_SCHEME = "Keyboard&Mouse";
+        private const string GAMEPAD_SCHEME = "Gamepad";
+        
+        public event Action ControlSchemeChanged;
+        public event Action OnDeviceChanged;
+        
+        [SerializeField] private PlayerInput _playerInput;
         
         private Dictionary<InputType, InputActionMap> _inputMaps = new();
+        private InputControl _gameInput;
+        private EventSystem _eventSystem;
+        private InputConfig _inputConfig;
+        private InputDevice _currentDevice;
+        
+        private InputType[] _currentInputTypes;
         
         public EventSystem CurrentEventSystem => _eventSystem;
-        public InputConfig Config { get; set; }
         public InputType CurrentInput { get; private set; }
+        public InputControl.UIActions UIActions { get; private set; }
+        public InputControl.PlayerActions PlayerActions { get; private set; }
+        public InputControl.DefaultActions DefaultActions { get; private set; }
         
-        public event Action CloseUIEvent; //for esc (close top window)
-
-        public InputService(InputConfig config)
-        {
-            Config = config;
-        }
+        public ControlSchemeType ControlScheme { get; private set; }
+        public InputDeviceType DeviceType { get; private set; }
+        public string CurrentDeviceTag { get; private set; }
 
         public void Initialize()
         {
+            _inputConfig = Container.GetConfig<InputConfig>();
             _gameInput = new InputControl();
-            _gameInput.UI.SetCallbacks(this);
-            _gameInput.Player.SetCallbacks(this);
-            
+
+            UIActions = _gameInput.UI;
+            PlayerActions = _gameInput.Player;
+            DefaultActions = _gameInput.Default;
+
+            PlayerActions.Enable();
+
             _inputMaps = new Dictionary<InputType, InputActionMap>()
             {
-                { InputType.UI , _gameInput.UI},
-                { InputType.Player , _gameInput.Player},
+                { InputType.UI, UIActions },
+                { InputType.Player, PlayerActions },
+                { InputType.Default, DefaultActions },
             };
-            
-            var eventSystem = Engine.CreateObject("[EVENT_SYSTEM]", null, typeof(EventSystem), typeof(InputSystemUIInputModule));
+
+            var eventSystem = new GameObject("[EVENT_SYSTEM]", typeof(EventSystem), typeof(InputSystemUIInputModule));
+            eventSystem.transform.parent = transform;
             _eventSystem = eventSystem.GetComponent<EventSystem>();
-            _eventSystem.GetComponent<InputSystemUIInputModule>().actionsAsset = Config.Control;
+            _eventSystem.GetComponent<InputSystemUIInputModule>().actionsAsset = _inputConfig.Control;
             
-            CloseUIEvent += () =>
-            {
-                var windowService = Engine.GetService<WindowService>();
-                windowService.HideTopWindowFromStack().Forget();
-            };
+            _playerInput.onControlsChanged += OnControlsChanged;
+            _playerInput.onActionTriggered += ChangeDevice;
+            OnControlsChanged(_playerInput);
         }
-        
-        public void SetInput(params InputType[] inputTypes) //Change input
+
+        private void OnDestroy()
         {
+            _playerInput.onControlsChanged -= OnControlsChanged;
+            _playerInput.onActionTriggered -= ChangeDevice;
+        }
+
+        private void ChangeDevice(InputAction.CallbackContext context)
+        {
+            if(_currentDevice == context.control.device) return;
+            _currentDevice = context.control.device;
+            CurrentDeviceTag = _currentDevice is Mouse or Keyboard ? _currentDevice.name : GAMEPAD_SCHEME;
+            OnDeviceChanged?.Invoke();
+        }
+
+        public InputType[] GetCurrentInput()
+        {
+            return _currentInputTypes;
+        }
+
+        public void SetInput(params InputType[] inputTypes)
+        {
+            _currentInputTypes = inputTypes;
+            
             foreach (var map in _inputMaps)
             {
                 if (inputTypes.Contains(map.Key))
                 {
                     CurrentInput = map.Key;
                     map.Value.Enable();
+                    continue;
                 }
-                else
-                {
-                    map.Value.Disable();
-                }
+
+                map.Value.Disable();
             }
         }
-        
-        public void Destroy()
+
+        private void OnControlsChanged(PlayerInput input)
         {
-            CloseUIEvent = null;
-        }
-        
-        //Player
-        public void OnMove(InputAction.CallbackContext context)
-        {
+            ControlSchemeType scheme = default;
+            InputDeviceType device = default;
+
+            switch (input.currentControlScheme)
+            {
+                case KEYBOARD_AND_MOUSE_SCHEME:
+                    scheme = ControlSchemeType.KeyboardAndMouse;
+                    device = InputDeviceType.KeyboardAndMouse;
+                    ToggleCursor(true);
+                    break;
+                case GAMEPAD_SCHEME:
+                    scheme = ControlSchemeType.Gamepad;
+#if !PLATFORM_SWITCH
+                    if (Gamepad.current is DualSenseGamepadHID)
+                        device = InputDeviceType.DualSense;
+                    else if (Gamepad.current is DualShockGamepad)
+                        device = InputDeviceType.DualShock;
+                    else
+                        device = InputDeviceType.Xbox;
+#else
+                    device = InputDeviceType.Nintendo;
+#endif
+                    ToggleCursor(false);
+                    break;
+            }
+
+            if (ControlScheme == scheme && DeviceType == device)
+                return;
+
+            ControlScheme = scheme;
+            DeviceType = device;
+            
+            Debug.Log( $"Device changed to: {DeviceType.ToString()}");
+            ControlSchemeChanged?.Invoke();
         }
 
-        public void OnLook(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnAttack(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnInteract(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnCrouch(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnJump(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnPrevious(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnNext(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnSprint(InputAction.CallbackContext context)
-        {
-        }
-        
-        //UI
-        public void OnNavigate(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnSubmit(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnCancel(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnPoint(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnClick(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnRightClick(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnMiddleClick(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnScrollWheel(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnTrackedDevicePosition(InputAction.CallbackContext context)
-        {
-        }
-
-        public void OnTrackedDeviceOrientation(InputAction.CallbackContext context)
-        {
-        }
+        private void ToggleCursor(bool active) => Cursor.visible = active;
     }
 }
